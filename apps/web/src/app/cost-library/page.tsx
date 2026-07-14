@@ -102,7 +102,7 @@ export default function CostLibraryPage() {
     <DashboardLayout title="Cost Library">
       <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 md:p-6 h-full flex flex-col overflow-y-auto select-none text-left">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-150 dark:border-zinc-850 pb-5 mb-5 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-850 pb-5 mb-5 shrink-0">
           <div>
             <h2 className="text-xs font-bold text-zinc-900 dark:text-zinc-50">Global Cost Library</h2>
             <p className="text-[10px] text-zinc-400 font-medium">Standardized cost fields. Shared fields update every linked calculator instantly.</p>
@@ -151,11 +151,11 @@ export default function CostLibraryPage() {
         <div className="flex-1 overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-zinc-150 dark:border-zinc-850 text-zinc-400 font-bold uppercase text-[9px] tracking-wider">
+              <tr className="border-b border-zinc-200 dark:border-zinc-850 text-zinc-400 font-bold uppercase text-[9px] tracking-wider">
                 <th className="py-3 px-3">Field Name</th>
                 <th className="py-3 px-3">Category</th>
                 <th className="py-3 px-3">Type</th>
-                <th className="py-3 px-3">Default Value</th>
+                <th className="py-3 px-3">Default Rate</th>
                 <th className="py-3 px-3">Scope</th>
                 <th className="py-3 px-3">Used In</th>
                 <th className="py-3 px-3 text-right">Actions</th>

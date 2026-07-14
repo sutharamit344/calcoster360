@@ -81,7 +81,7 @@ export default function CostLibraryPanel() {
   return (
     <div className="flex-1 flex flex-col select-none text-left h-full">
       {/* Header & Search */}
-      <div className="border-b border-zinc-150 dark:border-zinc-800 pb-4 mb-4 space-y-3">
+      <div className="border-b border-zinc-200 dark:border-zinc-800 pb-4 mb-4 space-y-3">
         <div>
           <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-50">Cost Library</h3>
           <p className="text-[10px] text-zinc-400 font-medium mt-1">Select and add cost parameters to your formula canvas.</p>
@@ -121,7 +121,7 @@ export default function CostLibraryPanel() {
                   {catFields.map(f => (
                     <div
                       key={f.id}
-                      className="flex items-center justify-between p-2 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 rounded-lg border border-transparent hover:border-zinc-250/20 dark:hover:border-zinc-800/50 transition-all text-xs text-zinc-700 dark:text-zinc-300"
+                      className="flex items-center justify-between p-2 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 rounded-lg border border-transparent hover:border-zinc-200/20 dark:hover:border-zinc-800/50 transition-all text-xs text-zinc-700 dark:text-zinc-300"
                     >
                       <div className="leading-none text-left max-w-[80%]">
                         <span className="font-semibold block text-zinc-800 dark:text-zinc-200 truncate">{f.label}</span>
@@ -148,7 +148,7 @@ export default function CostLibraryPanel() {
       </div>
 
       {/* Create Field Button */}
-      <div className="pt-3 mt-3 border-t border-zinc-150 dark:border-zinc-800">
+      <div className="pt-3 mt-3 border-t border-zinc-200 dark:border-zinc-800">
         <button
           onClick={() => setIsNewFieldOpen(true)}
           className="w-full h-8 border border-dashed border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-[11px] font-semibold text-zinc-650 dark:text-zinc-450 hover:text-zinc-900 rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"

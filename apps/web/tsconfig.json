@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@calcoster/calculator-engine": ["../../packages/calculator-engine/src"],
+      "@calcoster/types": ["../../packages/types/src"]
     }
   },
   "include": [

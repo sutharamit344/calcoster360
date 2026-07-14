@@ -26,7 +26,7 @@ export default function SettingsPage() {
     <DashboardLayout title="Settings">
       <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 md:p-6 h-full flex flex-col overflow-y-auto select-none text-left">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-150 dark:border-zinc-850 pb-5 mb-5 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-850 pb-5 mb-5 shrink-0">
           <div>
             <h2 className="text-xs font-bold text-zinc-900 dark:text-zinc-50">Settings & Workspace Config</h2>
             <p className="text-[10px] text-zinc-400 font-medium">Manage members, company billing defaults, and dashboard preferences.</p>
@@ -139,12 +139,12 @@ export default function SettingsPage() {
                 <span className="text-[10px] bg-green-500/10 text-green-500 px-2 py-0.5 rounded font-bold uppercase">Active</span>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-zinc-150 dark:border-zinc-800 flex justify-between items-center text-xs shrink-0 font-semibold">
+              <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center text-xs shrink-0 font-semibold">
                 <span className="text-zinc-500">Workspace Usage:</span>
                 <span className="text-zinc-800 dark:text-zinc-200">25 of 50 active calculators</span>
               </div>
 
-              <button className="w-full h-8 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-250 dark:hover:bg-zinc-700/80 text-xs font-bold rounded-lg text-zinc-800 dark:text-zinc-200 transition-colors">
+              <button className="w-full h-8 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700/80 text-xs font-bold rounded-lg text-zinc-800 dark:text-zinc-200 transition-colors">
                 Manage Billing In Stripe
               </button>
             </div>

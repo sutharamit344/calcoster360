@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { Quotation } from '@calcoster/types';
-import { dbSaveQuotation, dbDeleteQuotation } from '../../firebase/firestoreService';
+import { dbSaveQuotation, dbDeleteQuotation, dbGetQuotations } from '../../firebase/firestoreService';
 
 interface QuotationState {
   quotations: Quotation[];
@@ -90,6 +90,26 @@ export const saveQuotationAsync = createAsyncThunk(
   }
 );
 
+export const fetchQuotationsAsync = createAsyncThunk(
+  'quotation/fetchQuotations',
+  async () => {
+    try {
+      const list = await dbGetQuotations('company-1');
+      if (list.length === 0) {
+        // Seed initial mock data into Firestore if Firestore is empty
+        for (const q of initialQuotations) {
+          await dbSaveQuotation('company-1', q);
+        }
+        return initialQuotations;
+      }
+      return list;
+    } catch (e) {
+      console.warn("Firestore load failed, falling back to initial data:", e);
+      return initialQuotations;
+    }
+  }
+);
+
 export const quotationSlice = createSlice({
   name: 'quotation',
   initialState,
@@ -124,6 +144,17 @@ export const quotationSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // Fetch Quotations Async
+      .addCase(fetchQuotationsAsync.pending, (state) => {
+        state.isSavingQuotation = true;
+      })
+      .addCase(fetchQuotationsAsync.fulfilled, (state, action) => {
+        state.isSavingQuotation = false;
+        state.quotations = action.payload;
+      })
+      .addCase(fetchQuotationsAsync.rejected, (state) => {
+        state.isSavingQuotation = false;
+      })
       .addCase(saveQuotationAsync.pending, (state) => {
         state.isSavingQuotation = true;
       })

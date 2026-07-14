@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  transpilePackages: ["@calcoster/calculator-engine", "@calcoster/types"],
 };
 
 export default nextConfig;

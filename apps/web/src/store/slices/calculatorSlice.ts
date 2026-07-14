@@ -1,12 +1,13 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { Calculator, CalculatorBlock, CostProfile, CalculatorSettings, CalculatorHistoryEntry } from '@calcoster/types';
-import { dbSaveCalculator, dbDeleteCalculator } from '../../firebase/firestoreService';
+import { dbSaveCalculator, dbDeleteCalculator, dbGetCalculators } from '../../firebase/firestoreService';
 
 interface CalculatorState {
   calculators: Calculator[];
   activeCalculatorId: string | null;
   selectedBlockId: string | null;
   isSavingCalculator: boolean; // Tracks button loading status
+  previewInputs: Record<string, Record<string, number>>; // calculatorId -> { fieldId -> value }
 }
 
 // Prepopulated calculators
@@ -25,7 +26,16 @@ const initialCalculators: Calculator[] = [
     settings: {
       defaultCurrency: '₹',
       requireAllFields: true,
-      allowCustomMargins: true
+      allowCustomMargins: true,
+      generatedQuantity: {
+        enabled: false,
+        label: "Produced Pieces",
+        unit: "Pieces",
+        defaultValue: 1,
+        allowManualEdit: true,
+        showCostPerUnit: true,
+        costPerUnitLabel: "Cost Per Piece"
+      }
     },
     blocks: [
       {
@@ -183,7 +193,16 @@ const initialCalculators: Calculator[] = [
     settings: {
       defaultCurrency: '₹',
       requireAllFields: true,
-      allowCustomMargins: true
+      allowCustomMargins: true,
+      generatedQuantity: {
+        enabled: false,
+        label: "Produced Pieces",
+        unit: "Pieces",
+        defaultValue: 1,
+        allowManualEdit: true,
+        showCostPerUnit: true,
+        costPerUnitLabel: "Cost Per Piece"
+      }
     },
     blocks: [
       {
@@ -216,7 +235,16 @@ const initialCalculators: Calculator[] = [
     settings: {
       defaultCurrency: '₹',
       requireAllFields: true,
-      allowCustomMargins: false
+      allowCustomMargins: false,
+      generatedQuantity: {
+        enabled: false,
+        label: "Produced Pieces",
+        unit: "Pieces",
+        defaultValue: 1,
+        allowManualEdit: true,
+        showCostPerUnit: true,
+        costPerUnitLabel: "Cost Per Piece"
+      }
     },
     blocks: [],
     profiles: [],
@@ -236,7 +264,16 @@ const initialCalculators: Calculator[] = [
     settings: {
       defaultCurrency: '₹',
       requireAllFields: false,
-      allowCustomMargins: true
+      allowCustomMargins: true,
+      generatedQuantity: {
+        enabled: false,
+        label: "Produced Pieces",
+        unit: "Pieces",
+        defaultValue: 1,
+        allowManualEdit: true,
+        showCostPerUnit: true,
+        costPerUnitLabel: "Cost Per Piece"
+      }
     },
     blocks: [],
     profiles: [],
@@ -248,7 +285,16 @@ const initialState: CalculatorState = {
   calculators: initialCalculators,
   activeCalculatorId: 'calc-printing',
   selectedBlockId: 'block-1',
-  isSavingCalculator: false
+  isSavingCalculator: false,
+  previewInputs: {
+    'calc-printing': {
+      'field-paper-cost': 50,
+      'field-ink-cost': 3,
+      'field-printing-cost': 1000,
+      'field-labour-cost': 4,
+      'field-other-expenses': 1
+    }
+  }
 };
 
 // Async Thunks for Firestore Operations
@@ -273,6 +319,26 @@ export const deleteCalculatorAsync = createAsyncThunk(
       console.warn("Firestore delete failed, updating locally:", e);
     }
     return calculatorId;
+  }
+);
+
+export const fetchCalculatorsAsync = createAsyncThunk(
+  'calculator/fetchCalculators',
+  async () => {
+    try {
+      const list = await dbGetCalculators('company-1');
+      if (list.length === 0) {
+        // Seed initial mock data into Firestore if Firestore is empty
+        for (const c of initialCalculators) {
+          await dbSaveCalculator('company-1', c);
+        }
+        return initialCalculators;
+      }
+      return list;
+    } catch (e) {
+      console.warn("Firestore load failed, falling back to initial data:", e);
+      return initialCalculators;
+    }
   }
 );
 
@@ -445,10 +511,33 @@ export const calculatorSlice = createSlice({
         calc.updatedAt = new Date().toISOString();
         dbSaveCalculator('company-1', calc).catch(console.warn);
       }
+    },
+    updatePreviewInputs: (state, action: PayloadAction<{ calculatorId: string; inputs: Record<string, number> }>) => {
+      if (!state.previewInputs) {
+        state.previewInputs = {};
+      }
+      state.previewInputs[action.payload.calculatorId] = {
+        ...(state.previewInputs[action.payload.calculatorId] || {}),
+        ...action.payload.inputs
+      };
     }
   },
   extraReducers: (builder) => {
     builder
+      // Fetch Calculators Async
+      .addCase(fetchCalculatorsAsync.pending, (state) => {
+        state.isSavingCalculator = true;
+      })
+      .addCase(fetchCalculatorsAsync.fulfilled, (state, action) => {
+        state.isSavingCalculator = false;
+        state.calculators = action.payload;
+        if (!state.activeCalculatorId && action.payload.length > 0) {
+          state.activeCalculatorId = action.payload[0].id;
+        }
+      })
+      .addCase(fetchCalculatorsAsync.rejected, (state) => {
+        state.isSavingCalculator = false;
+      })
       // Save Calculator Async
       .addCase(saveCalculatorAsync.pending, (state) => {
         state.isSavingCalculator = true;
@@ -494,7 +583,8 @@ export const {
   deleteProfileFromCalculator,
   saveHistoryVersion,
   restoreHistoryVersion,
-  updateCalculatorSettings
+  updateCalculatorSettings,
+  updatePreviewInputs
 } = calculatorSlice.actions;
 
 export default calculatorSlice.reducer;

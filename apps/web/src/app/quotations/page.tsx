@@ -171,7 +171,7 @@ export default function QuotationsPage() {
                   {/* Calculations Details */}
                   <div className="space-y-3">
                     <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Calculation Specs:</span>
-                    <div className="bg-zinc-50 dark:bg-zinc-900 p-4 rounded-xl border border-zinc-150 dark:border-zinc-850">
+                    <div className="bg-zinc-50 dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-850">
                       <div className="grid grid-cols-2 gap-2 text-[10px] text-zinc-600 dark:text-zinc-400 font-medium">
                         {Object.entries(activeQuote.inputs).map(([fid, val]) => (
                           <div key={fid} className="truncate">
@@ -185,10 +185,10 @@ export default function QuotationsPage() {
                   {/* Itemized summary table */}
                   <div className="space-y-2">
                     <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Estimate Breakdown:</span>
-                    <div className="border border-zinc-150 dark:border-zinc-850 rounded-xl overflow-hidden">
+                    <div className="border border-zinc-200 dark:border-zinc-850 rounded-xl overflow-hidden">
                       <table className="w-full text-xs border-collapse">
                         <thead>
-                          <tr className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-150 dark:border-zinc-850 text-zinc-500 font-bold uppercase text-[9px]">
+                          <tr className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-850 text-zinc-500 font-bold uppercase text-[9px]">
                             <th className="py-2.5 px-3 text-left">Category</th>
                             <th className="py-2.5 px-3 text-right">Amount</th>
                           </tr>

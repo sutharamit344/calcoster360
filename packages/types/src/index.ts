@@ -17,6 +17,8 @@ export interface CostField {
   createdAt: string;
   updatedAt: string;
   updatedBy: string;
+  forOutputQty?: number;
+  outputUnit?: string;
 }
 
 export type OperatorType = '+' | '-' | '*' | '/' | '=';
@@ -71,10 +73,21 @@ export interface CalculatorHistoryEntry {
   };
 }
 
+export interface GeneratedQuantitySettings {
+  enabled: boolean;
+  label: string;
+  unit: string;
+  defaultValue: number;
+  allowManualEdit: boolean;
+  showCostPerUnit: boolean;
+  costPerUnitLabel: string;
+}
+
 export interface CalculatorSettings {
   defaultCurrency: string;
   requireAllFields: boolean;
   allowCustomMargins: boolean;
+  generatedQuantity?: GeneratedQuantitySettings;
 }
 
 export interface Calculator {
@@ -108,6 +121,8 @@ export interface CalculationResult {
   totalCost: number;
   breakdown: CalculationResultBreakdown[];
   timestamp: string;
+  generatedQuantity?: number;
+  costPerUnit?: number;
 }
 
 export interface Quotation {

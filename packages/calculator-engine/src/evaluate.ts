@@ -17,7 +17,8 @@ export function evaluateBlock(
   inputs: Record<string, number>, // fieldId -> quantity/value input
   runningTotal: number,
   outputs: Record<string, number>, // fieldId -> calculated amount (accumulated outputs)
-  breakdown: Record<CostCategory, number>
+  breakdown: Record<CostCategory, number>,
+  calculator?: Calculator
 ): { val: number; newRunningTotal: number } {
   let val = 0;
   const op = block.operatorBefore || '+';
@@ -28,13 +29,25 @@ export function evaluateBlock(
       const rate = block.valueOverride !== undefined ? block.valueOverride : field.defaultValue;
       const qty = inputs[field.id] !== undefined ? inputs[field.id] : 1; // Default quantity is 1 if not provided
 
+      let finalQty = qty;
+      const isAutoScale = inputs['__auto_scale'] === 1;
+      if (isAutoScale && field.category !== 'Tax' && field.category !== 'Profit' && calculator?.settings.generatedQuantity?.enabled) {
+        const genQtySettings = calculator.settings.generatedQuantity;
+        const producedPieces = inputs['__generated_quantity'] !== undefined
+          ? inputs['__generated_quantity']
+          : (genQtySettings.defaultValue ?? 1);
+        
+        const scale = field.forOutputQty && field.forOutputQty > 0 ? field.forOutputQty : 1;
+        finalQty = (qty / scale) * producedPieces;
+      }
+
       if (field.category === 'Tax' || field.category === 'Profit') {
         // Percentage based fields calculate based on the current running total
         const percentage = qty !== undefined ? qty : rate; // Use user entered percentage if available, otherwise default rate
         val = (percentage / 100) * runningTotal;
       } else {
         // Standard fields calculate as rate * quantity
-        val = rate * qty;
+        val = rate * finalQty;
       }
 
       // Record output value for this field
@@ -51,7 +64,7 @@ export function evaluateBlock(
     const groupBreakdown = {} as Record<CostCategory, number>;
 
     for (const subBlock of block.blocks) {
-      const res = evaluateBlock(subBlock, fieldsMap, inputs, groupTotal, groupOutputs, groupBreakdown);
+      const res = evaluateBlock(subBlock, fieldsMap, inputs, groupTotal, groupOutputs, groupBreakdown, calculator);
       groupTotal = res.newRunningTotal;
       // Merge outputs
       Object.assign(outputs, groupOutputs);
@@ -119,7 +132,7 @@ export function calculate(
   } as Record<CostCategory, number>;
 
   for (const block of calculator.blocks) {
-    const res = evaluateBlock(block, fieldsMap, inputs, runningTotal, outputs, breakdownAccumulator);
+    const res = evaluateBlock(block, fieldsMap, inputs, runningTotal, outputs, breakdownAccumulator, calculator);
     runningTotal = res.newRunningTotal;
   }
 
@@ -134,13 +147,31 @@ export function calculate(
       percentageOfTotal: totalCost > 0 ? (amount / totalCost) * 100 : 0
     }));
 
+  let generatedQuantity: number | undefined;
+  let costPerUnit: number | undefined;
+
+  const gqSettings = calculator.settings.generatedQuantity;
+  if (gqSettings?.enabled) {
+    generatedQuantity = inputs['__generated_quantity'] !== undefined
+      ? inputs['__generated_quantity']
+      : gqSettings.defaultValue;
+
+    if (generatedQuantity !== undefined && generatedQuantity > 0) {
+      costPerUnit = totalCost / generatedQuantity;
+    } else {
+      costPerUnit = 0;
+    }
+  }
+
   return {
     calculatorId: calculator.id,
     inputs,
     outputs,
     totalCost,
     breakdown,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    generatedQuantity,
+    costPerUnit
   };
 }
 

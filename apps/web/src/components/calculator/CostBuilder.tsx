@@ -53,14 +53,29 @@ export default function CostBuilder() {
     );
   }
 
-  // Live preview calculation: Assume standard inputs for the preview
-  const previewInputs: Record<string, number> = {};
+  const previewInputsRedux = useSelector((state: RootState) => state.calculator.previewInputs?.[activeCalc.id] || {});
+
+  // Live preview calculation: read from Redux, fallback to defaults
+  const previewInputs: Record<string, number> = { ...previewInputsRedux };
+  previewInputs['__auto_scale'] = 0; // Force manual/base preview inside canvas builder
   const collectFieldIds = (blocks: CalculatorBlock[]) => {
     blocks.forEach(b => {
       if (b.type === 'field') {
         const f = fields.find(field => field.id === b.fieldId);
-        if (f) {
-          previewInputs[f.id] = (f.category === 'Tax' || f.category === 'Profit') ? f.defaultValue : 50;
+        if (f && previewInputs[f.id] === undefined) {
+          let defaultQty = 1;
+          if (f.category === 'Tax' || f.category === 'Profit') {
+            defaultQty = f.defaultValue;
+          } else if (activeCalc.id === 'calc-printing') {
+            if (f.id === 'field-paper-cost') defaultQty = 50;
+            else if (f.id === 'field-ink-cost') defaultQty = 3;
+            else if (f.id === 'field-printing-cost') defaultQty = 1000;
+            else if (f.id === 'field-labour-cost') defaultQty = 4;
+            else if (f.id === 'field-other-expenses') defaultQty = 1;
+          } else {
+            defaultQty = 50;
+          }
+          previewInputs[f.id] = defaultQty;
         }
       } else if (b.type === 'group') {
         collectFieldIds(b.blocks);
@@ -69,18 +84,38 @@ export default function CostBuilder() {
   };
   collectFieldIds(activeCalc.blocks);
 
-  // Override specific quantities for Printing Calculator preview to match screenshot precisely:
-  if (activeCalc.id === 'calc-printing') {
-    previewInputs['field-paper-cost'] = 50;     // 50 Sheets
-    previewInputs['field-ink-cost'] = 3;        // 3 Litres
-    previewInputs['field-printing-cost'] = 1000; // 1000 Sides
-    previewInputs['field-labour-cost'] = 4;      // 4 Hours
-    previewInputs['field-other-expenses'] = 1;   // 1 Setup Unit
-  }
-
   const calcResult = calculate(activeCalc, previewInputs, fields);
 
   const handleCreateGroupBlock = () => {
+    if (selectedBlockId) {
+      // Find the selected block and wrap it in a group
+      const updated = JSON.parse(JSON.stringify(activeCalc.blocks)) as CalculatorBlock[];
+      
+      // Check if selected block is at top level
+      const idx = updated.findIndex(b => b.id === selectedBlockId);
+      if (idx !== -1) {
+        const selectedBlock = updated[idx];
+        const newGroup: CalculatorBlock = {
+          id: `block-group-${Date.now()}`,
+          type: 'group',
+          name: 'Custom Group',
+          operatorBefore: selectedBlock.operatorBefore || '+',
+          blocks: [
+            {
+              ...selectedBlock,
+              operatorBefore: '+' // Reset first item operator inside group
+            }
+          ]
+        };
+        // Replace selected block with the new group
+        updated[idx] = newGroup;
+        dispatch(reorderBlocksInCalculator({ calculatorId: activeCalc.id, blocks: updated }));
+        dispatch(setSelectedBlockId(newGroup.id)); // Set the group as selected
+        return;
+      }
+    }
+
+    // Default: create a new empty group at the end
     const newGroup: CalculatorBlock = {
       id: `block-group-${Date.now()}`,
       type: 'group',
@@ -101,21 +136,83 @@ export default function CostBuilder() {
     }));
   };
 
-  const handleMoveBlock = (index: number, direction: 'up' | 'down') => {
-    const updated = [...activeCalc.blocks];
-    const targetIdx = direction === 'up' ? index - 1 : index + 1;
-    if (targetIdx >= 0 && targetIdx < updated.length) {
-      const temp = updated[index];
-      updated[index] = updated[targetIdx];
-      updated[targetIdx] = temp;
+  const handleMoveBlock = (blockId: string, direction: 'up' | 'down') => {
+    const updated = JSON.parse(JSON.stringify(activeCalc.blocks)) as CalculatorBlock[];
+
+    // 1. Check if block is at top level
+    const topIdx = updated.findIndex(b => b.id === blockId);
+    if (topIdx !== -1) {
+      const block = updated[topIdx];
+      if (direction === 'up') {
+        if (topIdx > 0) {
+          const prev = updated[topIdx - 1];
+          if (prev.type === 'group') {
+            // Move inside group as last item
+            prev.blocks.push(block);
+            updated.splice(topIdx, 1);
+          } else {
+            // Swap
+            updated[topIdx] = prev;
+            updated[topIdx - 1] = block;
+          }
+        }
+      } else {
+        if (topIdx < updated.length - 1) {
+          const next = updated[topIdx + 1];
+          if (next.type === 'group') {
+            // Move inside group as first item
+            next.blocks.unshift(block);
+            updated.splice(topIdx, 1);
+          } else {
+            // Swap
+            updated[topIdx] = next;
+            updated[topIdx + 1] = block;
+          }
+        }
+      }
       dispatch(reorderBlocksInCalculator({ calculatorId: activeCalc.id, blocks: updated }));
+      return;
+    }
+
+    // 2. Check if block is inside a group
+    for (let i = 0; i < updated.length; i++) {
+      const group = updated[i];
+      if (group.type === 'group') {
+        const subIdx = group.blocks.findIndex(b => b.id === blockId);
+        if (subIdx !== -1) {
+          const block = group.blocks[subIdx];
+          if (direction === 'up') {
+            if (subIdx > 0) {
+              // Swap inside group
+              group.blocks[subIdx] = group.blocks[subIdx - 1];
+              group.blocks[subIdx - 1] = block;
+            } else {
+              // Move out of group (above it)
+              updated.splice(i, 0, block);
+              group.blocks.splice(0, 1);
+            }
+          } else {
+            if (subIdx < group.blocks.length - 1) {
+              // Swap inside group
+              group.blocks[subIdx] = group.blocks[subIdx + 1];
+              group.blocks[subIdx + 1] = block;
+            } else {
+              // Move out of group (below it)
+              updated.splice(i + 1, 0, block);
+              group.blocks.splice(subIdx, 1);
+            }
+          }
+          dispatch(reorderBlocksInCalculator({ calculatorId: activeCalc.id, blocks: updated }));
+          return;
+        }
+      }
     }
   };
 
 
 
   // Render a block inside canvas
-  const renderBlockCard = (block: CalculatorBlock, idx: number, isSubBlock = false) => {
+  const renderBlockCard = (block: CalculatorBlock, idx: number, siblings: CalculatorBlock[], isSubBlock = false) => {
     const isSelected = selectedBlockId === block.id;
     if (block.type === 'field') {
       const field = fields.find(f => f.id === block.fieldId);
@@ -136,23 +233,61 @@ export default function CostBuilder() {
       else if (field.category === 'Tax') categoryBg = 'border-l-violet-500 bg-violet-500/5';
       else if (field.category === 'Profit') categoryBg = 'border-l-rose-500 bg-rose-500/5';
 
+      const hasPrevField = idx > 0 && siblings[idx - 1].type === 'field';
+      const hasNextField = idx < siblings.length - 1 && siblings[idx + 1].type === 'field';
+      const prevBlock = idx > 0 ? siblings[idx - 1] : null;
+      const isTransitionBetweenFields = prevBlock && prevBlock.type === 'field' && block.type === 'field';
+
+      let wrapperMargin = 'mt-0';
+      if (prevBlock && prevBlock.type === 'group') {
+        wrapperMargin = 'mt-4';
+      }
+
+      let roundingClass = 'rounded-xl';
+      if (hasPrevField && hasNextField) {
+        roundingClass = 'rounded-none';
+      } else if (hasPrevField && !hasNextField) {
+        roundingClass = 'rounded-b-xl rounded-t-none';
+      } else if (!hasPrevField && hasNextField) {
+        roundingClass = 'rounded-t-xl rounded-b-none';
+      }
+
       return (
-        <div key={block.id} className="flex flex-col items-center">
+        <div key={block.id} className={`flex flex-col items-center w-full ${wrapperMargin}`}>
           {idx > 0 && (
-            <button
-              onClick={() => handleToggleOperator(block.id, block.operatorBefore || '+')}
-              className="my-2.5 h-6 w-6 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors shadow-sm cursor-pointer"
-            >
-              {block.operatorBefore || '+'}
-            </button>
+            isTransitionBetweenFields ? (
+              <div className="relative w-full flex justify-center h-0 z-20">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleOperator(block.id, block.operatorBefore || '+');
+                  }}
+                  className="absolute -translate-y-1/2 h-5 w-5 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors shadow-md cursor-pointer hover:scale-110 active:scale-95 duration-100"
+                >
+                  {block.operatorBefore || '+'}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleOperator(block.id, block.operatorBefore || '+');
+                }}
+                className="my-3 h-5 w-5 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors shadow-sm cursor-pointer"
+              >
+                {block.operatorBefore || '+'}
+              </button>
+            )
           )}
           <div
             onClick={(e) => {
               e.stopPropagation();
               dispatch(setSelectedBlockId(block.id));
             }}
-            className={`w-full max-w-xl bg-white dark:bg-zinc-900 border-l-4 ${categoryBg} border border-zinc-200/80 dark:border-zinc-800 rounded-xl px-4 py-3 shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center justify-between ${
-              isSelected ? 'ring-2 ring-primary ring-offset-2 dark:ring-offset-zinc-950 border-primary' : ''
+            className={`w-full max-w-xl bg-white dark:bg-zinc-900 border-l-4 ${categoryBg} border border-zinc-200/80 dark:border-zinc-800 ${roundingClass} ${hasPrevField ? '-mt-[1px]' : ''} px-4 py-3 shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center justify-between ${
+              isSelected ? 'ring-2 ring-primary ring-offset-2 dark:ring-offset-zinc-950 border-primary relative z-10' : ''
             }`}
           >
             <div className="flex items-center gap-3">
@@ -180,12 +315,24 @@ export default function CostBuilder() {
               </div>
 
               {/* Move up / down controls (Visible on focus) */}
-              {isSelected && !isSubBlock && (
+              {isSelected && (
                 <div className="flex flex-col gap-0.5 border-l border-zinc-200 dark:border-zinc-800 pl-3">
-                  <button onClick={() => handleMoveBlock(idx, 'up')} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-0.5">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMoveBlock(block.id, 'up');
+                    }}
+                    className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-0.5 cursor-pointer"
+                  >
                     <ChevronUp className="h-3.5 w-3.5" />
                   </button>
-                  <button onClick={() => handleMoveBlock(idx, 'down')} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-0.5">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMoveBlock(block.id, 'down');
+                    }}
+                    className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-0.5 cursor-pointer"
+                  >
                     <ChevronDown className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -195,12 +342,23 @@ export default function CostBuilder() {
         </div>
       );
     } else if (block.type === 'group') {
+      const prevBlock = idx > 0 ? siblings[idx - 1] : null;
+
+      let wrapperMargin = 'mt-0';
+      if (prevBlock) {
+        wrapperMargin = 'mt-4';
+      }
+
       return (
-        <div key={block.id} className="flex flex-col items-center w-full">
+        <div key={block.id} className={`flex flex-col items-center w-full ${wrapperMargin}`}>
           {idx > 0 && (
             <button
-              onClick={() => handleToggleOperator(block.id, block.operatorBefore || '+')}
-              className="my-2.5 h-6 w-6 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors shadow-sm cursor-pointer"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleOperator(block.id, block.operatorBefore || '+');
+              }}
+              className="my-3 h-5 w-5 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors shadow-sm cursor-pointer"
             >
               {block.operatorBefore || '+'}
             </button>
@@ -230,13 +388,13 @@ export default function CostBuilder() {
             </div>
 
             {/* Inner blocks stack */}
-            <div className="space-y-1">
+            <div className="space-y-0">
               {block.blocks.length === 0 ? (
                 <div className="text-[10px] text-zinc-400 p-4 border border-zinc-200/50 dark:border-zinc-800/50 rounded-xl bg-white dark:bg-zinc-950 text-center">
                   Drag / Add fields here inside group
                 </div>
               ) : (
-                block.blocks.map((sub, sIdx) => renderBlockCard(sub, sIdx, true))
+                block.blocks.map((sub, sIdx) => renderBlockCard(sub, sIdx, block.blocks, true))
               )}
             </div>
 
@@ -301,9 +459,9 @@ export default function CostBuilder() {
         <div className="flex items-center gap-3">
           {/* Zoom Control */}
           <div className="flex items-center border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 rounded-lg overflow-hidden h-7">
-            <button onClick={() => setZoom(Math.max(50, zoom - 10))} className="px-2 text-xs font-bold text-zinc-500 hover:bg-zinc-150">-</button>
+            <button onClick={() => setZoom(Math.max(50, zoom - 10))} className="px-2 text-xs font-bold text-zinc-500 hover:bg-zinc-200/50">-</button>
             <span className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300 px-1 w-10 text-center">{zoom}%</span>
-            <button onClick={() => setZoom(Math.min(150, zoom + 10))} className="px-2 text-xs font-bold text-zinc-500 hover:bg-zinc-150">+</button>
+            <button onClick={() => setZoom(Math.min(150, zoom + 10))} className="px-2 text-xs font-bold text-zinc-500 hover:bg-zinc-200/50">+</button>
           </div>
           <button className="text-zinc-400 hover:text-zinc-600 p-1">
             <Maximize2 className="h-4 w-4" />
@@ -316,8 +474,8 @@ export default function CostBuilder() {
         <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px] opacity-40 pointer-events-none" style={{ transform: `scale(${zoom / 100})` }}></div>
 
         {/* Dynamic Zoom Wrapper */}
-        <div className="w-full max-w-xl space-y-4 transition-transform duration-200 relative z-10" style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}>
-          {activeCalc.blocks.map((block, idx) => renderBlockCard(block, idx))}
+        <div className="w-full max-w-xl space-y-0 transition-transform duration-200 relative z-10" style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}>
+          {activeCalc.blocks.map((block, idx) => renderBlockCard(block, idx, activeCalc.blocks))}
 
           {activeCalc.blocks.length === 0 && (
             <div className="py-24 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-center text-zinc-400 bg-white dark:bg-zinc-900/40">
@@ -330,10 +488,10 @@ export default function CostBuilder() {
           {/* Add a beautiful summary preview card inside flow */}
           {activeCalc.blocks.length > 0 && (
             <div className="flex flex-col items-center">
-              <div className="my-2.5 h-6 w-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-bold text-primary shadow-sm">
+              <div className="my-2.5 h-6 w-6 rounded-full bg-primary/10 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-xs font-bold text-primary shadow-sm">
                 =
               </div>
-              <div className="w-full bg-gradient-to-br from-primary/10 via-primary/[0.03] to-transparent border border-primary/20 rounded-2xl p-4 flex items-center justify-between shadow-sm select-none hover:shadow-md transition-shadow duration-200">
+              <div className="w-full bg-gradient-to-br from-primary/10 via-primary/[0.03] to-transparent border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex items-center justify-between shadow-sm select-none hover:shadow-md transition-shadow duration-200">
                 <div className="flex items-center gap-3">
                   <div className="h-9 w-9 rounded-xl bg-primary text-white flex items-center justify-center shadow-md">
                     📊
@@ -372,7 +530,7 @@ export default function CostBuilder() {
             else if (item.category === 'Profit') color = 'border-l-rose-500';
 
             return (
-              <div key={item.category} className={`bg-zinc-50 dark:bg-zinc-900 border border-zinc-150 dark:border-zinc-850 border-l-2 ${color} p-2.5 rounded-lg text-left`}>
+              <div key={item.category} className={`bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 border-l-2 ${color} p-2.5 rounded-lg text-left`}>
                 <span className="text-[9px] text-zinc-400 font-semibold uppercase">{item.category}</span>
                 <span className="block text-xs font-bold text-zinc-800 dark:text-zinc-100 mt-1">
                   ₹{item.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
@@ -380,7 +538,7 @@ export default function CostBuilder() {
               </div>
             );
           })}
-          <div className="bg-primary/5 border border-primary/20 p-2.5 rounded-lg text-left">
+          <div className="bg-primary/5 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded-lg text-left">
             <span className="text-[9px] text-primary font-bold uppercase">Total Cost</span>
             <span className="block text-xs font-extrabold text-primary mt-1">
               ₹{calcResult.totalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}

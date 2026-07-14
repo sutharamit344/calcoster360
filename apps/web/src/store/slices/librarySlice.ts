@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { CostField } from '@calcoster/types';
-import { dbSaveCostField, dbDeleteCostField } from '../../firebase/firestoreService';
+import { dbSaveCostField, dbDeleteCostField, dbGetCostFields } from '../../firebase/firestoreService';
 
 interface LibraryState {
   fields: CostField[];
@@ -175,6 +175,26 @@ export const deleteFieldAsync = createAsyncThunk(
   }
 );
 
+export const fetchFieldsAsync = createAsyncThunk(
+  'library/fetchFields',
+  async () => {
+    try {
+      const list = await dbGetCostFields('company-1');
+      if (list.length === 0) {
+        // Seed initial mock data into Firestore if Firestore is empty
+        for (const f of initialFields) {
+          await dbSaveCostField('company-1', f);
+        }
+        return initialFields;
+      }
+      return list;
+    } catch (e) {
+      console.warn("Firestore load failed, falling back to initial data:", e);
+      return initialFields;
+    }
+  }
+);
+
 export const librarySlice = createSlice({
   name: 'library',
   initialState,
@@ -232,6 +252,17 @@ export const librarySlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // Fetch Fields Async
+      .addCase(fetchFieldsAsync.pending, (state) => {
+        state.isSaving = true;
+      })
+      .addCase(fetchFieldsAsync.fulfilled, (state, action) => {
+        state.isSaving = false;
+        state.fields = action.payload;
+      })
+      .addCase(fetchFieldsAsync.rejected, (state) => {
+        state.isSaving = false;
+      })
       // Save Field Async
       .addCase(saveFieldAsync.pending, (state) => {
         state.isSaving = true;

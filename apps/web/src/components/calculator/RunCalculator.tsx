@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { calculate } from '@calcoster/calculator-engine';
 import { addQuotation } from '../../store/slices/quotationSlice';
+import { updatePreviewInputs } from '../../store/slices/calculatorSlice';
 import { Play, FileText, ChevronDown, Check, RefreshCw, Bookmark } from 'lucide-react';
 import { CostField } from '@calcoster/types';
 
@@ -20,8 +21,8 @@ export default function RunCalculator() {
   // Profile presets selector state
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
 
-  // Form input quantities: fieldId -> user-entered amount
-  const [inputs, setInputs] = useState<Record<string, number>>({});
+  const hasInputs = useSelector((state: RootState) => !!state.calculator.previewInputs?.[activeCalcId || '']);
+  const inputs = useSelector((state: RootState) => state.calculator.previewInputs?.[activeCalcId || ''] || {});
 
   // Quotation trigger state
   const [isQuoting, setIsQuoting] = useState(false);
@@ -29,29 +30,29 @@ export default function RunCalculator() {
   const [customerEmail, setCustomerEmail] = useState('');
   const [isQuoteSuccess, setIsQuoteSuccess] = useState(false);
 
-  // Initialize inputs from active calculator blocks
+  // Initialize inputs in Redux if not already set
   useEffect(() => {
-    if (activeCalc) {
+    if (activeCalc && activeCalcId && !hasInputs) {
       const initialInputs: Record<string, number> = {};
       const setDefaults = (blocks: any[]) => {
         blocks.forEach(b => {
           if (b.type === 'field') {
             const f = fields.find(field => field.id === b.fieldId);
             if (f) {
-              // Match mock preview defaults:
-              let defaultQty = 1;
-              if (f.category === 'Tax' || f.category === 'Profit') {
-                defaultQty = f.defaultValue;
-              } else if (activeCalc.id === 'calc-printing') {
-                if (f.id === 'field-paper-cost') defaultQty = 50;
-                else if (f.id === 'field-ink-cost') defaultQty = 3;
-                else if (f.id === 'field-printing-cost') defaultQty = 1000;
-                else if (f.id === 'field-labour-cost') defaultQty = 4;
-                else if (f.id === 'field-other-expenses') defaultQty = 1;
-              } else {
-                defaultQty = 50; // standard fallback
+              // Match mock preview defaults (leave Tax/Profit out so they dynamically bind):
+              if (f.category !== 'Tax' && f.category !== 'Profit') {
+                let defaultQty = 1;
+                if (activeCalc.id === 'calc-printing') {
+                  if (f.id === 'field-paper-cost') defaultQty = 50;
+                  else if (f.id === 'field-ink-cost') defaultQty = 3;
+                  else if (f.id === 'field-printing-cost') defaultQty = 1000;
+                  else if (f.id === 'field-labour-cost') defaultQty = 4;
+                  else if (f.id === 'field-other-expenses') defaultQty = 1;
+                } else {
+                  defaultQty = 50; // standard fallback
+                }
+                initialInputs[f.id] = defaultQty;
               }
-              initialInputs[f.id] = defaultQty;
             }
           } else if (b.type === 'group') {
             setDefaults(b.blocks);
@@ -59,10 +60,9 @@ export default function RunCalculator() {
         });
       };
       setDefaults(activeCalc.blocks);
-      setInputs(initialInputs);
-      setSelectedProfileId('');
+      dispatch(updatePreviewInputs({ calculatorId: activeCalcId, inputs: initialInputs }));
     }
-  }, [activeCalcId, activeCalc]);
+  }, [activeCalcId, activeCalc, hasInputs, fields, dispatch]);
 
   if (!activeCalc) return null;
 
@@ -86,20 +86,15 @@ export default function RunCalculator() {
   const handleProfileSelect = (profileId: string) => {
     setSelectedProfileId(profileId);
     const profile = activeCalc.profiles.find(p => p.id === profileId);
-    if (profile) {
-      const updatedInputs = { ...inputs };
-      Object.entries(profile.values).forEach(([fid, val]) => {
-        updatedInputs[fid] = val;
-      });
-      setInputs(updatedInputs);
+    if (profile && activeCalcId) {
+      dispatch(updatePreviewInputs({ calculatorId: activeCalcId, inputs: profile.values }));
     }
   };
 
   const handleInputChange = (fieldId: string, val: number) => {
-    setInputs(prev => ({
-      ...prev,
-      [fieldId]: val
-    }));
+    if (activeCalcId) {
+      dispatch(updatePreviewInputs({ calculatorId: activeCalcId, inputs: { [fieldId]: val } }));
+    }
   };
 
   const handleResetInputs = () => {
@@ -107,7 +102,9 @@ export default function RunCalculator() {
     activeFields.forEach(f => {
       reset[f.id] = (f.category === 'Tax' || f.category === 'Profit') ? f.defaultValue : 1;
     });
-    setInputs(reset);
+    if (activeCalcId) {
+      dispatch(updatePreviewInputs({ calculatorId: activeCalcId, inputs: reset }));
+    }
     setSelectedProfileId('');
   };
 
@@ -195,13 +192,25 @@ export default function RunCalculator() {
               const isPercentage = f.type === 'Percentage';
               const val = inputs[f.id] !== undefined ? inputs[f.id] : (isPercentage ? f.defaultValue : 1);
 
+              const isAutoScale = inputs['__auto_scale'] === 1;
+              let scaledText = '';
+              const yieldUnit = f.outputUnit || activeCalc.settings.generatedQuantity?.unit || 'units';
+              if (isAutoScale && !isPercentage && activeCalc.settings.generatedQuantity?.enabled) {
+                const produced = inputs['__generated_quantity'] !== undefined
+                  ? inputs['__generated_quantity']
+                  : (activeCalc.settings.generatedQuantity.defaultValue ?? 1);
+                const scale = f.forOutputQty || 1;
+                const totalNeeded = (val / scale) * produced;
+                scaledText = `Scaled total: ${totalNeeded.toLocaleString('en-IN', { maximumFractionDigits: 2 })} ${f.unit}s`;
+              }
+
               return (
                 <div key={f.id} className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center py-2.5 border-b border-zinc-100 dark:border-zinc-900 last:border-b-0">
                   <div className="md:col-span-2 text-left">
                     <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
                       {f.label} {isPercentage ? `(${f.unit})` : `(${f.unit}s)`}
                     </span>
-                    <span className="block text-[10px] text-zinc-400 mt-1 font-medium">
+                    <span className="block text-[10px] text-zinc-400 mt-1 font-medium leading-relaxed">
                       {!isPercentage && (
                         <span className="text-primary font-bold mr-1.5">
                           Rate: ₹{f.defaultValue.toFixed(2)} / {f.unit}
@@ -212,6 +221,11 @@ export default function RunCalculator() {
                           {!isPercentage && <span className="text-zinc-300 dark:text-zinc-700 mx-1.5">•</span>}
                           {f.description}
                         </>
+                      )}
+                      {scaledText && (
+                        <span className="block mt-1 font-bold text-green-650 dark:text-green-400 bg-green-500/5 dark:bg-green-500/10 px-2 py-1 rounded border border-green-200/40 dark:border-green-800/40 w-fit">
+                          {scaledText} (for {f.forOutputQty || 1} {yieldUnit})
+                        </span>
                       )}
                     </span>
                   </div>
@@ -248,13 +262,104 @@ export default function RunCalculator() {
 
       {/* Live Cost Summary Column */}
       <div className="w-full lg:w-96 flex flex-col gap-6 shrink-0">
-        {/* Main Cost Banner */}
-        <div className="bg-zinc-900 text-white rounded-2xl p-6 border border-zinc-800/80 shadow-md">
-          <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Estimated Cost</span>
-          <div className="text-2xl font-extrabold text-white mt-2">
-            ₹{result.totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+        {/* Generated Quantity Input Card */}
+        {activeCalc.settings.generatedQuantity?.enabled && (
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-3 text-left">
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">
+                {activeCalc.settings.generatedQuantity.label || 'Generated Quantity'}
+              </span>
+              <span className="text-[10px] text-zinc-400 font-semibold uppercase">
+                {activeCalc.settings.generatedQuantity.unit || 'Units'}
+              </span>
+            </div>
+            
+            <div className="relative">
+              <input
+                type="number"
+                disabled={!activeCalc.settings.generatedQuantity.allowManualEdit}
+                value={
+                  inputs['__generated_quantity'] !== undefined
+                    ? inputs['__generated_quantity']
+                    : activeCalc.settings.generatedQuantity.defaultValue
+                }
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  handleInputChange('__generated_quantity', val);
+                }}
+                className="w-full h-8 px-3 border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary text-zinc-900 dark:text-zinc-100 text-right pr-14"
+              />
+              <span className="absolute right-3 top-2.5 text-[9px] text-zinc-400 uppercase font-semibold">
+                {activeCalc.settings.generatedQuantity.unit || 'Units'}
+              </span>
+            </div>
+
+            {/* Validation warning */}
+            {((inputs['__generated_quantity'] !== undefined
+              ? inputs['__generated_quantity']
+              : activeCalc.settings.generatedQuantity.defaultValue) <= 0) && (
+              <span className="text-[9px] font-bold text-red-500 block mt-1">
+                Generated Quantity must be greater than zero.
+              </span>
+            )}
+
+            {/* Auto-calculate toggle switch */}
+            <div className="flex items-center justify-between pt-3 border-t border-zinc-100 dark:border-zinc-900 mt-1 shrink-0">
+              <div className="flex flex-col text-left">
+                <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300">Auto-scale Requirements</span>
+                <span className="text-[9px] text-zinc-400 font-medium">Scale materials & labor automatically</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={inputs['__auto_scale'] === 1}
+                  onChange={(e) => {
+                    handleInputChange('__auto_scale', e.target.checked ? 1 : 0);
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-zinc-200 dark:bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary transition-colors"></div>
+              </label>
+            </div>
           </div>
-          <span className="text-[10px] text-zinc-400 mt-2 block font-medium">Includes defined margins and tax rates.</span>
+        )}
+
+        {/* Main Cost Banner */}
+        <div className="bg-zinc-900 text-white rounded-2xl p-6 border border-zinc-800/80 shadow-md space-y-4 text-left">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Estimated Total Cost</span>
+            <div className="text-2xl font-extrabold text-white mt-2">
+              {activeCalc.settings.defaultCurrency || '₹'}{result.totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+
+          {activeCalc.settings.generatedQuantity?.enabled && (
+            <div className="pt-4 border-t border-zinc-800 space-y-2.5">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-zinc-450 font-medium">
+                  {activeCalc.settings.generatedQuantity.label || 'Produced Pieces'}
+                </span>
+                <span className="font-bold text-zinc-200">
+                  {result.generatedQuantity !== undefined ? result.generatedQuantity : (activeCalc.settings.generatedQuantity.defaultValue || 1)} {activeCalc.settings.generatedQuantity.unit}
+                </span>
+              </div>
+              
+              {activeCalc.settings.generatedQuantity.showCostPerUnit && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-zinc-450 font-medium">
+                    {activeCalc.settings.generatedQuantity.costPerUnitLabel || 'Cost Per Unit'}
+                  </span>
+                  <span className="font-extrabold text-primary">
+                    {activeCalc.settings.defaultCurrency || '₹'}{result.costPerUnit !== undefined ? result.costPerUnit.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'} / {activeCalc.settings.generatedQuantity.unit}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!activeCalc.settings.generatedQuantity?.enabled && (
+            <span className="text-[10px] text-zinc-450 mt-2 block font-medium">Includes defined margins and tax rates.</span>
+          )}
         </div>
 
         {/* Breakdown details */}
@@ -275,11 +380,11 @@ export default function RunCalculator() {
                 else if (item.category === 'Profit') barColor = 'bg-rose-500';
 
                 return (
-                  <div key={item.category} className="space-y-1.5">
+                  <div key={item.category} className="space-y-1.5 text-left">
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-zinc-500 font-semibold">{item.category} Cost</span>
                       <span className="font-bold text-zinc-800 dark:text-zinc-200">
-                        ₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {activeCalc.settings.defaultCurrency || '₹'}{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="w-full bg-zinc-100 dark:bg-zinc-900 h-1.5 rounded-full overflow-hidden">
@@ -337,7 +442,7 @@ export default function RunCalculator() {
                 </div>
 
                 {/* Preview Cost */}
-                <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-150 dark:border-zinc-850 flex justify-between items-center">
+                <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-850 flex justify-between items-center">
                   <span className="text-[10px] text-zinc-500 font-semibold uppercase">Total Quote Amount</span>
                   <span className="text-sm font-extrabold text-primary">
                     ₹{result.totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}

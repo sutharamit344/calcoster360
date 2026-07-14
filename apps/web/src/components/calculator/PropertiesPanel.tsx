@@ -15,6 +15,7 @@ import CostLibraryPanel from './CostLibraryPanel';
 
 export default function PropertiesPanel() {
   const dispatch = useDispatch();
+  const [showAdvanced, setShowAdvanced] = React.useState(false);
   const activeCalcId = useSelector((state: RootState) => state.calculator.activeCalculatorId);
   const selectedBlockId = useSelector((state: RootState) => state.calculator.selectedBlockId);
   const calculators = useSelector((state: RootState) => state.calculator.calculators);
@@ -78,7 +79,7 @@ export default function PropertiesPanel() {
         <div className="flex items-center gap-1.5">
           <button 
             onClick={() => dispatch(setSelectedBlockId(null))}
-            className="text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-250 p-1 hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-800/60"
+            className="text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 p-1 hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-800/60"
             title="Back to Cost Library"
           >
             <ChevronRight className="h-4 w-4 rotate-180" />
@@ -169,7 +170,7 @@ export default function PropertiesPanel() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Default Value</label>
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Default Rate</label>
               <input
                 type="number"
                 value={selectedField.defaultValue}
@@ -207,13 +208,58 @@ export default function PropertiesPanel() {
           </div>
 
           {/* Advanced Settings */}
-          <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 py-1.5 cursor-pointer font-medium">
-            <span className="flex items-center gap-1">
-              <HelpCircle className="h-3.5 w-3.5" />
+          <div 
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 py-2 cursor-pointer font-semibold border-t border-zinc-100 dark:border-zinc-900 mt-3 pt-3"
+          >
+            <span className="flex items-center gap-1.5">
+              <Settings className="h-3.5 w-3.5 text-zinc-400" />
               Advanced Settings
             </span>
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className={`h-4 w-4 transition-transform duration-250 ${showAdvanced ? 'rotate-90' : ''}`} />
           </div>
+
+          {showAdvanced && (
+            <div className="space-y-4 pl-3 border-l-2 border-zinc-200 dark:border-zinc-800 animate-in fade-in slide-in-from-top-1 duration-200 mt-2.5">
+              {/* For Output Quantity */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">For Output Quantity</label>
+                  <span className="text-[9px] bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded font-bold">Yield Scale</span>
+                </div>
+                <input
+                  type="number"
+                  min="0.0001"
+                  step="any"
+                  value={selectedField.forOutputQty !== undefined ? selectedField.forOutputQty : 1}
+                  onChange={(e) => handleFieldChange({ forOutputQty: Number(e.target.value) || 1 })}
+                  className="w-full h-8 px-3 border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary text-zinc-900 dark:text-zinc-100"
+                  placeholder="e.g. 1"
+                />
+                <span className="block text-[9px] text-zinc-400 leading-normal font-medium mt-1">
+                  The number of produced/generated units this field's usage rate applies to. Default is 1.
+                </span>
+              </div>
+
+              {/* Output Yield Unit */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Output Yield Unit</label>
+                  <span className="text-[9px] bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded font-bold">Yield Unit</span>
+                </div>
+                <input
+                  type="text"
+                  value={selectedField.outputUnit !== undefined ? selectedField.outputUnit : ''}
+                  onChange={(e) => handleFieldChange({ outputUnit: e.target.value })}
+                  className="w-full h-8 px-3 border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary text-zinc-900 dark:text-zinc-100"
+                  placeholder="e.g. Piece (fallback is 'units')"
+                />
+                <span className="block text-[9px] text-zinc-400 leading-normal font-medium mt-1">
+                  The unit of produced items for the yield scale (e.g. Piece, Box, Card).
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       ) : selectedBlock.type === 'group' ? (
         <div className="flex-1 space-y-4 text-left">

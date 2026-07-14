@@ -67,7 +67,16 @@ export default function CostCalculatorsPage() {
       settings: {
         defaultCurrency: '₹',
         requireAllFields: false,
-        allowCustomMargins: true
+        allowCustomMargins: true,
+        generatedQuantity: {
+          enabled: false,
+          label: "Produced Pieces",
+          unit: "Pieces",
+          defaultValue: 1,
+          allowManualEdit: true,
+          showCostPerUnit: true,
+          costPerUnitLabel: "Cost Per Piece"
+        }
       },
       createdBy: 'Amit Kumar',
       updatedBy: 'Amit Kumar'
@@ -129,7 +138,7 @@ export default function CostCalculatorsPage() {
             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Calculators</span>
             <button
               onClick={() => setIsNewCalcOpen(true)}
-              className="p-1 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-primary rounded-lg transition-colors border border-zinc-150 dark:border-zinc-800"
+              className="p-1 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-primary rounded-lg transition-colors border border-zinc-200 dark:border-zinc-800"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
@@ -160,7 +169,7 @@ export default function CostCalculatorsPage() {
           {activeCalc ? (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Tab navigation */}
-              <div className="flex justify-between items-center bg-white dark:bg-zinc-950 border border-zinc-250 dark:border-zinc-800 px-4 py-1.5 rounded-2xl mb-4 shrink-0 shadow-sm">
+              <div className="flex justify-between items-center bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 px-4 py-1.5 rounded-2xl mb-4 shrink-0 shadow-sm">
                 <div className="flex gap-1.5">
                   {[
                     { id: 'build', name: 'Build', icon: Wrench },
@@ -236,7 +245,7 @@ export default function CostCalculatorsPage() {
                             </div>
                           </div>
 
-                          <div className="mt-4 pt-3.5 border-t border-zinc-150 dark:border-zinc-850 flex justify-between items-center text-[10px] text-zinc-400 shrink-0">
+                          <div className="mt-4 pt-3.5 border-t border-zinc-200 dark:border-zinc-850 flex justify-between items-center text-[10px] text-zinc-400 shrink-0">
                             <span>Created by {p.createdBy}</span>
                             <button
                               onClick={() => dispatch(deleteProfileFromCalculator({ calculatorId: activeCalc.id, profileId: p.id }))}
@@ -266,7 +275,7 @@ export default function CostCalculatorsPage() {
                       <p className="text-[10px] text-zinc-400 font-medium">Revert calculator structure or rates to older checkpoints.</p>
                     </div>
 
-                    <div className="flex-1 space-y-6 text-left relative pl-4 border-l border-zinc-150 dark:border-zinc-800 ml-2">
+                    <div className="flex-1 space-y-6 text-left relative pl-4 border-l border-zinc-200 dark:border-zinc-800 ml-2">
                       {activeCalc.history.map((entry, idx) => (
                         <div key={idx} className="relative space-y-2">
                           {/* Timeline dot */}
@@ -379,6 +388,203 @@ export default function CostCalculatorsPage() {
                           />
                           <div className="w-9 h-5 bg-zinc-200 dark:bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                         </label>
+                      </div>
+
+                      {/* Generated Quantity Settings */}
+                      <div className="border-t border-zinc-100 dark:border-zinc-800 pt-5 space-y-4">
+                        <div>
+                          <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-50">Generated Quantity</h3>
+                          <p className="text-[10px] text-zinc-400 font-medium">Configure calculation of cost per output unit (e.g. cost per piece).</p>
+                        </div>
+
+                        {/* Enable Toggle */}
+                        <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
+                          <div className="flex flex-col text-left">
+                            <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Enable Generated Quantity</span>
+                            <span className="text-[10px] text-zinc-400">Calculate cost per generated unit from total cost</span>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={activeCalc.settings.generatedQuantity?.enabled || false}
+                              onChange={(e) => {
+                                const current = activeCalc.settings.generatedQuantity || {
+                                  enabled: false,
+                                  label: "Produced Pieces",
+                                  unit: "Pieces",
+                                  defaultValue: 1,
+                                  allowManualEdit: true,
+                                  showCostPerUnit: true,
+                                  costPerUnitLabel: "Cost Per Piece"
+                                };
+                                dispatch(updateCalculatorSettings({
+                                  calculatorId: activeCalc.id,
+                                  settings: {
+                                    generatedQuantity: {
+                                      ...current,
+                                      enabled: e.target.checked
+                                    }
+                                  }
+                                }));
+                              }}
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-zinc-200 dark:bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                          </label>
+                        </div>
+
+                        {activeCalc.settings.generatedQuantity?.enabled && (
+                          <div className="space-y-4 pl-3 border-l-2 border-zinc-100 dark:border-zinc-800">
+                            {/* Output Label */}
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Output Label</label>
+                              <input
+                                type="text"
+                                value={activeCalc.settings.generatedQuantity.label}
+                                onChange={(e) => {
+                                  dispatch(updateCalculatorSettings({
+                                    calculatorId: activeCalc.id,
+                                    settings: {
+                                      generatedQuantity: {
+                                        ...activeCalc.settings.generatedQuantity!,
+                                        label: e.target.value
+                                      }
+                                    }
+                                  }));
+                                }}
+                                className="w-full h-8 px-3 border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary text-zinc-900 dark:text-zinc-100"
+                                placeholder="e.g. Produced Pieces, Tickets Printed"
+                                required
+                              />
+                            </div>
+
+                            {/* Output Unit */}
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Output Unit</label>
+                              <input
+                                type="text"
+                                value={activeCalc.settings.generatedQuantity.unit}
+                                onChange={(e) => {
+                                  dispatch(updateCalculatorSettings({
+                                    calculatorId: activeCalc.id,
+                                    settings: {
+                                      generatedQuantity: {
+                                        ...activeCalc.settings.generatedQuantity!,
+                                        unit: e.target.value
+                                      }
+                                    }
+                                  }));
+                                }}
+                                className="w-full h-8 px-3 border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary text-zinc-900 dark:text-zinc-100"
+                                placeholder="e.g. Pieces, Cards, Box"
+                                required
+                              />
+                            </div>
+
+                            {/* Default Quantity */}
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Default Quantity</label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={activeCalc.settings.generatedQuantity.defaultValue}
+                                onChange={(e) => {
+                                  const val = Math.max(1, Number(e.target.value));
+                                  dispatch(updateCalculatorSettings({
+                                    calculatorId: activeCalc.id,
+                                    settings: {
+                                      generatedQuantity: {
+                                        ...activeCalc.settings.generatedQuantity!,
+                                        defaultValue: val
+                                      }
+                                    }
+                                  }));
+                                }}
+                                className="w-full h-8 px-3 border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary text-zinc-900 dark:text-zinc-100"
+                                required
+                              />
+                            </div>
+
+                            {/* Allow Manual Edit */}
+                            <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
+                              <div className="flex flex-col text-left">
+                                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Allow Manual Editing During Calculation</span>
+                                <span className="text-[10px] text-zinc-400">Permit overriding quantity in calculate view</span>
+                              </div>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={activeCalc.settings.generatedQuantity.allowManualEdit}
+                                  onChange={(e) => {
+                                    dispatch(updateCalculatorSettings({
+                                      calculatorId: activeCalc.id,
+                                      settings: {
+                                        generatedQuantity: {
+                                          ...activeCalc.settings.generatedQuantity!,
+                                          allowManualEdit: e.target.checked
+                                        }
+                                      }
+                                    }));
+                                  }}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-zinc-200 dark:bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                              </label>
+                            </div>
+
+                            {/* Show Cost Per Unit */}
+                            <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
+                              <div className="flex flex-col text-left">
+                                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Show Cost Per Unit</span>
+                                <span className="text-[10px] text-zinc-400">Display cost per unit in the summary panel</span>
+                              </div>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={activeCalc.settings.generatedQuantity.showCostPerUnit}
+                                  onChange={(e) => {
+                                    dispatch(updateCalculatorSettings({
+                                      calculatorId: activeCalc.id,
+                                      settings: {
+                                        generatedQuantity: {
+                                          ...activeCalc.settings.generatedQuantity!,
+                                          showCostPerUnit: e.target.checked
+                                        }
+                                      }
+                                    }));
+                                  }}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-zinc-200 dark:bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                              </label>
+                            </div>
+
+                            {activeCalc.settings.generatedQuantity.showCostPerUnit && (
+                              /* Cost Per Unit Label */
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Cost Per Unit Label</label>
+                                <input
+                                  type="text"
+                                  value={activeCalc.settings.generatedQuantity.costPerUnitLabel}
+                                  onChange={(e) => {
+                                    dispatch(updateCalculatorSettings({
+                                      calculatorId: activeCalc.id,
+                                      settings: {
+                                        generatedQuantity: {
+                                          ...activeCalc.settings.generatedQuantity!,
+                                          costPerUnitLabel: e.target.value
+                                        }
+                                      }
+                                    }));
+                                  }}
+                                  className="w-full h-8 px-3 border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary text-zinc-900 dark:text-zinc-100"
+                                  placeholder="e.g. Cost Per Piece, Cost Per Card"
+                                  required
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Delete Danger Section */}
@@ -515,7 +721,7 @@ export default function CostCalculatorsPage() {
               />
             </div>
 
-            <div className="text-[10px] text-zinc-400 bg-zinc-50 dark:bg-zinc-900 p-3 rounded-lg border border-zinc-150 dark:border-zinc-850">
+            <div className="text-[10px] text-zinc-400 bg-zinc-50 dark:bg-zinc-900 p-3 rounded-lg border border-zinc-200 dark:border-zinc-850">
               📌 This profile preset will capture all current values in the builder as defaults.
             </div>
 

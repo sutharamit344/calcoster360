@@ -58,3 +58,30 @@ export async function dbDeleteQuotation(companyId: string, quotationId: string):
   const ref = doc(db, 'companies', companyId, 'quotations', quotationId);
   await deleteDoc(ref);
 }
+
+/**
+ * Fetches all Cost Fields from Firestore.
+ */
+export async function dbGetCostFields(companyId: string): Promise<CostField[]> {
+  const ref = collection(db, 'companies', companyId, 'costFields');
+  const snapshot = await getDocs(ref);
+  return snapshot.docs.map(doc => doc.data() as CostField);
+}
+
+/**
+ * Fetches all Calculators from Firestore.
+ */
+export async function dbGetCalculators(companyId: string): Promise<Calculator[]> {
+  const ref = collection(db, 'companies', companyId, 'calculators');
+  const snapshot = await getDocs(ref);
+  return snapshot.docs.map(doc => doc.data() as Calculator);
+}
+
+/**
+ * Fetches all Quotations from Firestore.
+ */
+export async function dbGetQuotations(companyId: string): Promise<Quotation[]> {
+  const ref = collection(db, 'companies', companyId, 'quotations');
+  const snapshot = await getDocs(ref);
+  return snapshot.docs.map(doc => doc.data() as Quotation);
+}
